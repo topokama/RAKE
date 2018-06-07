@@ -15,15 +15,16 @@ To install rake as a package, run:
 
 ```python
 from nlp_rake import rake
+import nltk
 
-stoppath = 'data/stoplists/SmartStoplist.txt'
+rakeObj = rake.Rake(stop_words_list=nltk.corpus.stopwords.words('russian'), min_char_length=4, max_words_length=3, min_keyword_frequency=2)
 
 rake_object = rake.Rake(stoppath, 5, 3, 4)
 
-sample_file = open("data/docs/fao_test/w2167e.txt", 'r', encoding="iso-8859-1")
+sample_file = open("source.txt", 'r', encoding="iso-8859-1")
 text = sample_file.read()
 
-keywords = rake_object.run(text)
+keywords = rakeObj.run(text)
 
 # 3. print results
 print("Keywords:", keywords)

@@ -16,6 +16,16 @@
 # need to modify the metric for the candidate score, because the adjoined candidates
 # have a very high score (because of the nature of the original score metric)
 
+# NOTE 3: The code published by a_medelyan (https://github.com/zelandiya/RAKE-tutorial)
+# has been additionally extended by topokama to add a sliding window technique, which
+# allows the algorithm not to simply except phrases surpassing max words count limit,
+# but to split it into array of smaller phrases by a sliding window principle.
+# Also, input parameters was changed in order to allow supplying list of stopwords
+# instead of path to file with it. In example, now it is possible to supply NLTK library's lists.
+# Furthermore, there were implemented optional functionality of decreasing longer
+# phrases' scores, either by supplied methods or passed lambda function.
+# All code is backward compatible.
+
 from __future__ import absolute_import
 from __future__ import print_function
 import re
@@ -56,7 +66,7 @@ def separate_words(text, min_word_return_size):
     @param text The text that must be split in to words.
     @param min_word_return_size The minimum no of characters a word must have to be included.
     """
-    splitter = re.compile('[^a-zA-Z0-9_\\+\\-/]')
+    splitter = re.compile('[^a-zA-Zа-яА-ЯёЁ0-9_\\+\\-/]')
     words = []
     for single_word in splitter.split(text):
         current_word = single_word.strip().lower()
@@ -71,7 +81,7 @@ def split_sentences(text):
     Utility function to return a list of sentences.
     @param text The text that must be split in to sentences.
     """
-    sentence_delimiters = re.compile(u'[\\[\\]\n.!?,;:\t\\-\\"\\(\\)\\\'\u2019\u2013]')
+    sentence_delimiters = re.compile(u'[\\[\\]\n.!?,;:—\t\\-\\"\\(\\)\\\'\u2019\u2013]')
     sentences = sentence_delimiters.split(text)
     return sentences
 
@@ -162,6 +172,12 @@ def generate_candidate_keywords(sentence_list, stopword_pattern, stop_word_list,
     for s in sentence_list:
         tmp = re.sub(stopword_pattern, '|', s.strip())
         phrases = tmp.split("|")
+        for ind, phrase in enumerate(phrases):
+            words = phrase.split()
+            if len(words) > max_words_length:
+                del(phrases[ind])
+                phrases.extend(sliding_window(words, 2))
+
         for phrase in phrases:
             phrase = phrase.strip().lower()
             if phrase != "" and is_acceptable(phrase, min_char_length, max_words_length):
@@ -169,6 +185,16 @@ def generate_candidate_keywords(sentence_list, stopword_pattern, stop_word_list,
     phrase_list += extract_adjoined_candidates(sentence_list, stop_word_list, min_words_length_adj,
                                                max_words_length_adj, min_phrase_freq_adj)
     return phrase_list
+
+def sliding_window(words, length):
+    phrases = []
+    for i in range(0, len(words) - length + 1):
+        phrase = ""
+        for j in range(0, length):
+            phrase+= words[i + j] + ' '
+        phrases.append(phrase.strip())
+
+    return phrases
 
 
 def is_acceptable(phrase, min_char_length, max_words_length):
@@ -241,10 +267,14 @@ def generate_candidate_keyword_scores(phrase_list, word_score, min_keyword_frequ
 
 
 class Rake(object):
-    def __init__(self, stop_words_path, min_char_length=1, max_words_length=5, min_keyword_frequency=1,
-                 min_words_length_adj=1, max_words_length_adj=1, min_phrase_freq_adj=2):
+    def __init__(self, stop_words_path='', min_char_length=1, max_words_length=5, min_keyword_frequency=1,
+                 min_words_length_adj=1, max_words_length_adj=1, min_phrase_freq_adj=2, stop_words_list=None):
+
+        if stop_words_list is None:
+            stop_words_list = load_stop_words(stop_words_path)
+
         self.__stop_words_path = stop_words_path
-        self.__stop_words_list = load_stop_words(stop_words_path)
+        self.__stop_words_list = stop_words_list
         self.__min_char_length = min_char_length
         self.__max_words_length = max_words_length
         self.__min_keyword_frequency = min_keyword_frequency
