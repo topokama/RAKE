@@ -31,6 +31,7 @@ from __future__ import print_function
 import re
 import operator
 import six
+import math
 from six.moves import range
 from collections import Counter
 
@@ -81,7 +82,7 @@ def split_sentences(text):
     Utility function to return a list of sentences.
     @param text The text that must be split in to sentences.
     """
-    sentence_delimiters = re.compile(u'[\\[\\]\n.!?,;:—\t\\-\\"\\(\\)\\\'\u2019\u2013]')
+    sentence_delimiters = re.compile(u'[\[\]\n.!?,;:—\t\-\"()“”„«»‘’\'\u2013]')
     sentences = sentence_delimiters.split(text)
     return sentences
 
@@ -186,6 +187,7 @@ def generate_candidate_keywords(sentence_list, stopword_pattern, stop_word_list,
                                                max_words_length_adj, min_phrase_freq_adj)
     return phrase_list
 
+
 def sliding_window(words, length):
     phrases = []
     for i in range(0, len(words) - length + 1):
@@ -225,6 +227,16 @@ def is_acceptable(phrase, min_char_length, max_words_length):
     return 1
 
 
+def correct_word_scores(word_scores, max_words_count, correction_type='none', correction_func=None):
+    if (correction_type != 'none'):
+        for phrase, score in word_scores.items():
+            if (correction_type == 'default'):
+                score = score * (1 / len(phrase))
+                word_scores[phrase] = score
+
+    return word_scores
+
+
 def calculate_word_scores(phraseList):
     word_frequency = {}
     word_degree = {}
@@ -246,8 +258,7 @@ def calculate_word_scores(phraseList):
     word_score = {}
     for item in word_frequency:
         word_score.setdefault(item, 0)
-        word_score[item] = word_degree[item] / (word_frequency[item] * 1.0)  # orig.
-    # word_score[item] = word_frequency[item]/(word_degree[item] * 1.0) #exp.
+        word_score[item] = word_degree[item] / (word_frequency[item] * 1.0)
     return word_score
 
 
@@ -268,7 +279,8 @@ def generate_candidate_keyword_scores(phrase_list, word_score, min_keyword_frequ
 
 class Rake(object):
     def __init__(self, stop_words_path='', min_char_length=1, max_words_length=5, min_keyword_frequency=1,
-                 min_words_length_adj=1, max_words_length_adj=1, min_phrase_freq_adj=2, stop_words_list=None):
+                 min_words_length_adj=1, max_words_length_adj=1, min_phrase_freq_adj=2, stop_words_list=None,
+                 long_phrases_score_correction='none', long_phrases_score_correction_func=None):
 
         if stop_words_list is None:
             stop_words_list = load_stop_words(stop_words_path)
@@ -281,6 +293,8 @@ class Rake(object):
         self.__min_words_length_adj = min_words_length_adj
         self.__max_words_length_adj = max_words_length_adj
         self.__min_phrase_freq_adj = min_phrase_freq_adj
+        self.__long_phrases_score_correction = long_phrases_score_correction
+        self.__long_phrases_score_correction_func = long_phrases_score_correction_func
 
     def run(self, text):
         sentence_list = split_sentences(text)
@@ -293,6 +307,9 @@ class Rake(object):
                                                   self.__min_phrase_freq_adj)
 
         word_scores = calculate_word_scores(phrase_list)
+
+        word_scores = correct_word_scores(word_scores, self.__max_words_length,
+                                          self.__long_phrases_score_correction, self.__long_phrases_score_correction_func)
 
         keyword_candidates = generate_candidate_keyword_scores(phrase_list, word_scores, self.__min_keyword_frequency)
 
